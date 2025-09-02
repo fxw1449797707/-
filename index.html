@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世界地图</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <!-- 自定义样式 -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            position: relative;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .map-container {
+            height: calc(100vh - 80px);
+            position: relative;
+            border-radius: 0 0 20px 20px;
+            overflow: hidden;
+            box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            min-width: 250px;
+        }
+
+        .control-panel h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            color: #555;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .control-group select,
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .control-group select:focus,
+        .control-group button:hover {
+            border-color: #667eea;
+            outline: none;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .control-group button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            max-width: 300px;
+            display: none;
+        }
+
+        .coordinates {
+            color: #666;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        /* 自定义弹出框样式 */
+        .leaflet-popup-content-wrapper {
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .leaflet-popup-content {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+        }
+
+        .country-info {
+            text-align: center;
+        }
+
+        .country-info h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .country-info p {
+            color: #666;
+            margin: 5px 0;
+        }
+
+        /* 加载动画 */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌍 世界地图 🌎</h1>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+        
+        <!-- 控制面板 -->
+        <div class="control-panel">
+            <h3>🎛️ 地图控制</h3>
+            
+            <div class="control-group">
+                <label for="mapStyle">地图样式:</label>
+                <select id="mapStyle">
+                    <option value="osm">标准地图</option>
+                    <option value="satellite">卫星图</option>
+                    <option value="terrain">地形图</option>
+                    <option value="dark">暗色主题</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="viewMode">视图模式:</label>
+                <select id="viewMode">
+                    <option value="world">世界视图</option>
+                    <option value="asia">亚洲</option>
+                    <option value="europe">欧洲</option>
+                    <option value="africa">非洲</option>
+                    <option value="north_america">北美洲</option>
+                    <option value="south_america">南美洲</option>
+                    <option value="oceania">大洋洲</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button id="resetView">🏠 重置视图</button>
+            </div>
+
+            <div class="control-group">
+                <button id="toggleMarkers">📍 切换标记</button>
+            </div>
+        </div>
+
+        <!-- 信息面板 -->
+        <div class="info-panel" id="infoPanel">
+            <div id="locationInfo"></div>
+            <div class="coordinates" id="coordinates"></div>
+        </div>
+
+        <!-- 加载动画 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在加载地图...</p>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <script>
+        // 全局变量
+        let map;
+        let currentLayer;
+        let markersLayer;
+        let showMarkers = true;
+
+        // 地图样式配置
+        const mapStyles = {
+            osm: {
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attribution: '© OpenStreetMap contributors'
+            },
+            satellite: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: '© Esri, Maxar, Earthstar Geographics'
+            },
+            terrain: {
+                url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                attribution: '© OpenTopoMap contributors'
+            },
+            dark: {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attribution: '© CartoDB, © OpenStreetMap contributors'
+            }
+        };
+
+        // 视图预设
+        const viewPresets = {
+            world: { center: [20, 0], zoom: 2 },
+            asia: { center: [35, 100], zoom: 3 },
+            europe: { center: [55, 10], zoom: 4 },
+            africa: { center: [0, 20], zoom: 3 },
+            north_america: { center: [45, -100], zoom: 3 },
+            south_america: { center: [-15, -60], zoom: 3 },
+            oceania: { center: [-25, 140], zoom: 4 }
+        };
+
+        // 世界主要城市数据
+        const majorCities = [
+            { name: "北京", country: "中国", lat: 39.9042, lng: 116.4074, population: "2153万" },
+            { name: "东京", country: "日本", lat: 35.6762, lng: 139.6503, population: "1395万" },
+            { name: "纽约", country: "美国", lat: 40.7128, lng: -74.0060, population: "851万" },
+            { name: "伦敦", country: "英国", lat: 51.5074, lng: -0.1278, population: "898万" },
+            { name: "巴黎", country: "法国", lat: 48.8566, lng: 2.3522, population: "1085万" },
+            { name: "莫斯科", country: "俄罗斯", lat: 55.7558, lng: 37.6176, population: "1213万" },
+            { name: "悉尼", country: "澳大利亚", lat: -33.8688, lng: 151.2093, population: "531万" },
+            { name: "开罗", country: "埃及", lat: 30.0444, lng: 31.2357, population: "2056万" },
+            { name: "圣保罗", country: "巴西", lat: -23.5505, lng: -46.6333, population: "1232万" },
+            { name: "孟买", country: "印度", lat: 19.0760, lng: 72.8777, population: "2042万" },
+            { name: "上海", country: "中国", lat: 31.2304, lng: 121.4737, population: "2424万" },
+            { name: "洛杉矶", country: "美国", lat: 34.0522, lng: -118.2437, population: "399万" },
+            { name: "首尔", country: "韩国", lat: 37.5665, lng: 126.9780, population: "975万" },
+            { name: "雅加达", country: "印度尼西亚", lat: -6.2088, lng: 106.8456, population: "1056万" },
+            { name: "德里", country: "印度", lat: 28.7041, lng: 77.1025, population: "3255万" }
+        ];
+
+        // 初始化地图
+        function initMap() {
+            // 创建地图
+            map = L.map('map', {
+                center: [20, 0],
+                zoom: 2,
+                zoomControl: false,
+                attributionControl: true
+            });
+
+            // 添加缩放控制到左下角
+            L.control.zoom({
+                position: 'bottomleft'
+            }).addTo(map);
+
+            // 设置初始图层
+            changeMapStyle('osm');
+
+            // 创建标记图层
+            markersLayer = L.layerGroup().addTo(map);
+            addCityMarkers();
+
+            // 添加地图事件监听
+            map.on('click', onMapClick);
+            map.on('mousemove', onMapMouseMove);
+
+            // 隐藏加载动画
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // 更改地图样式
+        function changeMapStyle(style) {
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+            
+            const styleConfig = mapStyles[style];
+            currentLayer = L.tileLayer(styleConfig.url, {
+                attribution: styleConfig.attribution,
+                maxZoom: 18
+            }).addTo(map);
+        }
+
+        // 添加城市标记
+        function addCityMarkers() {
+            markersLayer.clearLayers();
+            
+            majorCities.forEach(city => {
+                const marker = L.circleMarker([city.lat, city.lng], {
+                    radius: 8,
+                    fillColor: '#ff6b6b',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+
+                // 创建弹出框内容
+                const popupContent = `
+                    <div class="country-info">
+                        <h4>🏙️ ${city.name}</h4>
+                        <p><strong>国家:</strong> ${city.country}</p>
+                        <p><strong>人口:</strong> ${city.population}</p>
+                        <p><strong>坐标:</strong> ${city.lat.toFixed(4)}, ${city.lng.toFixed(4)}</p>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent, {
+                    maxWidth: 250,
+                    className: 'custom-popup'
+                });
+
+                // 添加悬停效果
+                marker.on('mouseover', function() {
+                    this.setStyle({
+                        radius: 12,
+                        fillColor: '#4ecdc4'
+                    });
+                });
+
+                marker.on('mouseout', function() {
+                    this.setStyle({
+                        radius: 8,
+                        fillColor: '#ff6b6b'
+                    });
+                });
+
+                markersLayer.addLayer(marker);
+            });
+        }
+
+        // 地图点击事件
+        function onMapClick(e) {
+            const { lat, lng } = e.latlng;
+            
+            // 创建临时标记
+            const tempMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '📍',
+                    iconSize: [20, 20]
+                })
+            }).addTo(map);
+
+            // 显示位置信息
+            const popupContent = `
+                <div class="country-info">
+                    <h4>📍 选中位置</h4>
+                    <p><strong>纬度:</strong> ${lat.toFixed(6)}</p>
+                    <p><strong>经度:</strong> ${lng.toFixed(6)}</p>
+                    <p><em>点击其他位置可重新选择</em></p>
+                </div>
+            `;
+
+            tempMarker.bindPopup(popupContent).openPopup();
+
+            // 3秒后移除临时标记
+            setTimeout(() => {
+                map.removeLayer(tempMarker);
+            }, 3000);
+        }
+
+        // 鼠标移动事件
+        function onMapMouseMove(e) {
+            const { lat, lng } = e.latlng;
+            document.getElementById('coordinates').textContent = 
+                `坐标: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        }
+
+        // 更改视图
+        function changeView(viewName) {
+            const preset = viewPresets[viewName];
+            if (preset) {
+                map.setView(preset.center, preset.zoom);
+            }
+        }
+
+        // 切换标记显示
+        function toggleMarkers() {
+            if (showMarkers) {
+                map.removeLayer(markersLayer);
+                document.getElementById('toggleMarkers').textContent = '📍 显示标记';
+                showMarkers = false;
+            } else {
+                map.addLayer(markersLayer);
+                document.getElementById('toggleMarkers').textContent = '📍 隐藏标记';
+                showMarkers = true;
+            }
+        }
+
+        // 重置视图
+        function resetView() {
+            map.setView([20, 0], 2);
+        }
+
+        // 显示信息面板
+        function showInfoPanel(info) {
+            const panel = document.getElementById('infoPanel');
+            document.getElementById('locationInfo').innerHTML = info;
+            panel.style.display = 'block';
+        }
+
+        // 隐藏信息面板
+        function hideInfoPanel() {
+            document.getElementById('infoPanel').style.display = 'none';
+        }
+
+        // 事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化地图
+            initMap();
+
+            // 地图样式切换
+            document.getElementById('mapStyle').addEventListener('change', function() {
+                changeMapStyle(this.value);
+            });
+
+            // 视图模式切换
+            document.getElementById('viewMode').addEventListener('change', function() {
+                changeView(this.value);
+            });
+
+            // 重置视图按钮
+            document.getElementById('resetView').addEventListener('click', resetView);
+
+            // 切换标记按钮
+            document.getElementById('toggleMarkers').addEventListener('click', toggleMarkers);
+        });
+
+        // 添加一些有趣的地理信息
+        const geographyFacts = [
+            "🌍 地球表面约71%被海洋覆盖",
+            "🏔️ 珠穆朗玛峰是世界最高峰，海拔8,848.86米",
+            "🌊 马里亚纳海沟是世界最深的海沟，深度超过11,000米",
+            "🏜️ 撒哈拉沙漠是世界最大的热带沙漠",
+            "🌿 亚马逊雨林被称为'地球之肺'",
+            "🧊 南极洲是地球上最冷、最干燥、风力最强的大陆"
+        ];
+
+        // 随机显示地理知识
+        function showRandomFact() {
+            const fact = geographyFacts[Math.floor(Math.random() * geographyFacts.length)];
+            showInfoPanel(`<p style="color: #2c3e50; font-weight: 500;">${fact}</p>`);
+            
+            setTimeout(hideInfoPanel, 5000);
+        }
+
+        // 每10秒显示一个地理知识
+        setInterval(showRandomFact, 10000);
+
+        // 添加键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'r':
+                case 'R':
+                    resetView();
+                    break;
+                case 'm':
+                case 'M':
+                    toggleMarkers();
+                    break;
+                case '1':
+                    changeView('world');
+                    break;
+                case '2':
+                    changeView('asia');
+                    break;
+                case '3':
+                    changeView('europe');
+                    break;
+                case '4':
+                    changeView('africa');
+                    break;
+                case '5':
+                    changeView('north_america');
+                    break;
+                case '6':
+                    changeView('south_america');
+                    break;
+                case '7':
+                    changeView('oceania');
+                    break;
+            }
+        });
+
+        // 欢迎消息
+        setTimeout(() => {
+            showInfoPanel(`
+                <h4 style="color: #2c3e50;">🎉 欢迎使用世界地图!</h4>
+                <p>• 点击地图任意位置查看坐标</p>
+                <p>• 点击城市标记查看详细信息</p>
+                <p>• 使用右侧控制面板切换样式</p>
+                <p>• 快捷键: R(重置) M(标记) 1-7(大洲)</p>
+            `);
+            
+            setTimeout(hideInfoPanel, 8000);
+        }, 2000);
+    </script>
+</body>
+</html>
